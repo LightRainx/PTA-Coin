@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b0e1d">
+<title>掷硬币</title>
+<link rel="icon" href="data:,">
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { touch-action: manipulation; }
+body {
+  min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+  font-family: system-ui, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  background:
+    radial-gradient(900px 500px at 50% -10%, rgba(255,205,90,.13), transparent 60%),
+    radial-gradient(1300px 900px at 50% 115%, rgba(70,90,180,.22), transparent 60%),
+    linear-gradient(180deg, #171b31 0%, #10142a 58%, #0b0e1d 100%);
+  color: #eef1fa; padding: 20px 16px; user-select: none; -webkit-user-select: none;
+}
+.card {
+  width: min(880px, 100%);
+  background: linear-gradient(180deg, rgba(32,38,70,.97), rgba(17,21,40,.98));
+  border: 1px solid rgba(255,213,106,.28);
+  border-radius: 28px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08);
+  padding: 26px 28px 20px;
+  text-align: center;
+}
+.layout { display: grid; grid-template-columns: 1fr; gap: 4px; }
+@media (min-width: 760px) {
+  .layout { grid-template-columns: 1.05fr 1fr; align-items: center; gap: 6px 34px; }
+  .right { text-align: left; }
+  .right .result { align-items: flex-start; }
+  .right .stats, .right .history, .right .hint { margin-left: 0; }
+}
+/* ---------- 标题 ---------- */
+h1 {
+  font-family: "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  font-size: 30px; font-weight: 900; letter-spacing: 12px; margin-bottom: 2px;
+  background: linear-gradient(180deg, #fff3c4 8%, #ffd76a 48%, #c9911a 92%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(255,205,90,.25));
+}
+.en { font-size: 10px; letter-spacing: 6px; color: #8b93b5; margin-bottom: 8px; }
+.sub { font-size: 12px; color: #9aa3c0; margin-bottom: 6px; }
+/* ---------- 硬币舞台 ---------- */
+.stage {
+  height: 310px; display: flex; align-items: flex-end; justify-content: center;
+  perspective: 900px; position: relative; cursor: pointer;
+}
+.stage::before {
+  content: ''; position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
+  width: 260px; height: 260px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255,205,90,.14), transparent 70%);
+  pointer-events: none;
+}
+.shadow {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  width: 170px; height: 26px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0,0,0,.6), rgba(0,0,0,0));
+}
+.shadow.tossing { animation: shadow 1.55s ease-in-out both; }
+@keyframes shadow {
+  0%   { transform: translateX(-50%) scale(1); opacity: 1; }
+  42%  { transform: translateX(-50%) scale(.5); opacity: .45; }
+  76%  { transform: translateX(-50%) scale(1); opacity: 1; }
+  85%  { transform: translateX(-50%) scale(1.15); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+.toss { will-change: transform; }
+.toss.tossing { animation: toss 1.55s cubic-bezier(.3,.1,.4,1) both; }
+@keyframes toss {
+  0%   { transform: translateY(0) scale(1,1); }
+  42%  { transform: translateY(-175px) scale(1,1); }
+  76%  { transform: translateY(0) scale(1,1); }
+  85%  { transform: translateY(0) scale(1.07,.9); }
+  100% { transform: translateY(0) scale(1,1); }
+}
+.coin {
+  position: relative; width: 185px; height: 185px;
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 1.55s cubic-bezier(.22,.15,.25,1);
+}
+@media (min-width: 760px) { .coin { width: 210px; height: 210px; } .stage { height: 330px; } }
+/* ---------- 硬币两面（浮雕金 / 铂银） ---------- */
+.face {
+  position: absolute; inset: 0; border-radius: 50%;
+  backface-visibility: hidden; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.face.heads {
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255,255,255,.55), rgba(255,255,255,0) 42%),
+    radial-gradient(circle at 50% 50%, #fbe9a6 0%, #f2c94c 42%, #d9a51f 68%, #b07d12 88%, #8a620d 100%);
+  border: 13px solid #7a570c;
+  transform: translateZ(11px);
+}
+.face.tails {
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255,255,255,.6), rgba(255,255,255,0) 42%),
+    radial-gradient(circle at 50% 50%, #f6f7fa 0%, #d4d8e0 42%, #aab0bc 68%, #838a97 88%, #626873 100%);
+  border: 13px solid #565b66;
+  transform: rotateY(180deg) translateZ(11px);
+}
+.face::before { /* 币缘锯齿 */
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(0,0,0,.22) 0deg 4deg, transparent 4deg 8deg);
+  -webkit-mask: radial-gradient(closest-side, transparent 74%, #000 75%);
+  mask: radial-gradient(closest-side, transparent 74%, #000 75%);
+}
+.ring {
+  position: absolute; inset: 15%; border-radius: 50%;
+  border: 3px solid rgba(0,0,0,.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 1px 2px rgba(255,255,255,.25);
+}
+.mark { position: absolute; font-size: 15px; line-height: 1; opacity: .75; }
+.face.heads .mark { color: #6b4c0a; }
+.face.tails .mark { color: #3f434c; }
+.mark.t { top: 24%; }
+.mark.b { bottom: 24%; }
+.char {
+  font-family: "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  font-size: 58px; font-weight: 900;
+}
+.face.heads .char { color: #6b4c0a; text-shadow: 0 1px 0 rgba(255,255,255,.4), 0 3px 8px rgba(0,0,0,.28); }
+.face.tails .char { color: #3f434c; text-shadow: 0 1px 0 rgba(255,255,255,.5), 0 3px 8px rgba(0,0,0,.28); }
+/* ---------- 结果 ---------- */
+.result { min-height: 74px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.result .big {
+  font-family: "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  font-size: 46px; font-weight: 900;
+}
+.result .big.heads-c { color: #ffd76a; text-shadow: 0 0 26px rgba(255,200,80,.5); }
+.result .big.tails-c { color: #cdd3e0; text-shadow: 0 0 26px rgba(200,210,240,.45); }
+.result .streak { font-size: 12px; color: #b3a86a; min-height: 16px; }
+.result.pop .big { animation: pop .45s cubic-bezier(.2,1.6,.4,1) both; }
+@keyframes pop { 0% { transform: scale(.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+/* ---------- 按钮 ---------- */
+#flip {
+  position: relative; overflow: hidden; cursor: pointer;
+  width: 100%; padding: 16px; margin-top: 8px;
+  border: 1px solid #8a620d; border-radius: 16px;
+  font-family: "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  font-size: 20px; font-weight: 900; letter-spacing: 10px; color: #241a04;
+  background: linear-gradient(180deg, #ffe08a, #e9b53c 55%, #c9911a);
+  box-shadow: 0 6px 0 #8a620d, 0 14px 30px rgba(233,181,60,.28), inset 0 1px 0 rgba(255,255,255,.6);
+  transition: transform .08s, box-shadow .08s, filter .2s;
+}
+#flip::after { /* 按压流光 */
+  content: ''; position: absolute; top: 0; bottom: 0; left: -70%; width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent);
+  transform: skewX(-20deg);
+}
+#flip.busy::after { animation: shine .9s ease-in-out; }
+@keyframes shine { to { left: 130%; } }
+#flip:active { transform: translateY(4px); box-shadow: 0 2px 0 #8a620d, 0 6px 12px rgba(233,181,60,.2), inset 0 1px 0 rgba(255,255,255,.6); }
+#flip.busy { filter: saturate(.8) brightness(.92); }
+/* ---------- 统计 ---------- */
+.stats { display: flex; margin-top: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 16px; overflow: hidden; }
+.stat { flex: 1; padding: 12px 4px; position: relative; }
+.stat + .stat::before { content: ''; position: absolute; left: 0; top: 24%; bottom: 24%; width: 1px; background: rgba(255,255,255,.12); }
+.stat .v { font-size: 24px; font-weight: 800; line-height: 1.15; }
+.stat .v.gold { color: #ffd76a; }
+.stat .v.silver { color: #cdd3e0; }
+.stat .k { font-size: 11px; color: #9aa3c0; margin-top: 3px; }
+.stat .p { font-size: 10px; color: #6f7895; margin-top: 3px; }
+/* ---------- 历史 ---------- */
+.history { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 14px; min-height: 26px; }
+.chip {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid rgba(0,0,0,.28);
+  font-size: 12px; line-height: 23px; font-weight: 800;
+}
+.chip.h { background: radial-gradient(circle at 32% 28%, #ffe9a8, #d9a51f 72%); color: #5c4305; }
+.chip.t { background: radial-gradient(circle at 32% 28%, #f0f2f6, #a9aeb9 72%); color: #3c4048; }
+.hint { font-size: 11px; color: #6f7895; margin-top: 13px; }
+.hint a { color: #c9a44c; text-decoration: underline; cursor: pointer; }
+/* ---------- 落地金粒子 ---------- */
+.spark {
+  position: fixed; width: 6px; height: 6px; margin: -3px; border-radius: 50%;
+  pointer-events: none; box-shadow: 0 0 10px 1px rgba(255,215,106,.8);
+  animation: spark .85s ease-out forwards;
+}
+@keyframes spark {
+  0%   { transform: translate(0,0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(.15); opacity: 0; }
+}
+/* ---------- 小屏幕紧凑 ---------- */
+@media (max-height: 560px) {
+  .stage { height: 235px; }
+  .coin { width: 145px; height: 145px; }
+  .char { font-size: 44px; }
+  .result { min-height: 52px; }
+  .result .big { font-size: 34px; }
+  #flip { padding: 10px; }
+  .stats { margin-top: 8px; }
+  .history { margin-top: 8px; }
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="layout">
+    <section class="left">
+      <div class="stage" id="stage">
+        <div class="shadow" id="shadow"></div>
+        <div class="toss" id="toss">
+          <div class="coin" id="coin">
+            <div class="face heads">
+              <div class="ring"></div>
+              <span class="char">正</span>
+              <span class="mark t">★</span>
+              <span class="mark b">★</span>
+            </div>
+            <div class="face tails">
+              <div class="ring"></div>
+              <span class="char">反</span>
+              <span class="mark t">❉</span>
+              <span class="mark b">❉</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="right">
+      <header>
+        <h1>掷硬币</h1>
+        <div class="en">LUCKY COIN FLIP</div>
+        <p class="sub">点硬币或按按钮 · 每次都是新的一掷</p>
+      </header>
+      <div class="result" id="result">
+        <div class="big heads-c">正</div>
+        <div class="streak">准备好了吗？</div>
+      </div>
+      <button id="flip">掷 一 下</button>
+      <div class="stats">
+        <div class="stat"><div class="v" id="stTotal">0</div><div class="k">总次数</div></div>
+        <div class="stat"><div class="v gold" id="stHeads">0</div><div class="k">正面</div><div class="p" id="stHeadsP">50%</div></div>
+        <div class="stat"><div class="v silver" id="stTails">0</div><div class="k">反面</div><div class="p" id="stTailsP">50%</div></div>
+      </div>
+      <div class="history" id="history"></div>
+      <div class="hint">结果由浏览器安全随机数生成，正反各 50% · <a id="reset">清空记录</a></div>
+    </section>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var coin = $('coin'), toss = $('toss'), shadow = $('shadow'),
+      result = $('result'), flipBtn = $('flip'), stage = $('stage');
+  var KEY = 'coinflip-v1';
+  var data = { heads: 0, tails: 0, hist: [] };
+  try {
+    var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved && Array.isArray(saved.hist)) data = saved;
+  } catch (e) {}
+
+  var angle = 0, busy = false, actx = null;
+
+  function randBit() {
+    if (window.crypto && crypto.getRandomValues) {
+      var a = new Uint32Array(1);
+      crypto.getRandomValues(a);
+      return (a[0] >>> 31) & 1;
+    }
+    return Math.random() < 0.5 ? 0 : 1;
+  }
+
+  function ensureAudio() {
+    if (!actx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) actx = new AC();
+    }
+    if (actx && actx.state === 'suspended') actx.resume();
+  }
+
+  function sfxFlick() {
+    ensureAudio(); if (!actx) return;
+    var dur = 0.06, sr = actx.sampleRate;
+    var buf = actx.createBuffer(1, Math.floor(sr * dur), sr);
+    var ch = buf.getChannelData(0);
+    for (var i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / ch.length);
+    var src = actx.createBufferSource(); src.buffer = buf;
+    var f = actx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 2200;
+    var g = actx.createGain(); g.gain.value = 0.16;
+    src.connect(f); f.connect(g); g.connect(actx.destination);
+    src.start();
+  }
+
+  function sfxDing(heads) {
+    ensureAudio(); if (!actx) return;
+    var t = actx.currentTime;
+    [[0, heads ? 1318.5 : 987.8], [0.13, heads ? 1975.5 : 1480.0]].forEach(function (p) {
+      var o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'sine'; o.frequency.value = p[1];
+      g.gain.setValueAtTime(0.0001, t + p[0]);
+      g.gain.exponentialRampToValueAtTime(0.22, t + p[0] + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + p[0] + 0.7);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t + p[0]); o.stop(t + p[0] + 0.8);
+    });
+  }
+
+  function sparkle() {
+    var r = coin.getBoundingClientRect();
+    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    for (var i = 0; i < 12; i++) {
+      var s = document.createElement('span');
+      s.className = 'spark';
+      var a = Math.random() * Math.PI * 2, d = 90 + Math.random() * 90;
+      s.style.setProperty('--dx', (Math.cos(a) * d).toFixed(0) + 'px');
+      s.style.setProperty('--dy', (Math.sin(a) * d - 50).toFixed(0) + 'px');
+      s.style.left = cx + 'px'; s.style.top = cy + 'px';
+      s.style.background = Math.random() < 0.6 ? '#ffd76a' : '#fff';
+      s.style.animationDelay = (Math.random() * 0.15).toFixed(2) + 's';
+      s.addEventListener('animationend', function () { s.remove(); });
+      document.body.appendChild(s);
+    }
+  }
+
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+  }
+
+  function streak() {
+    var n = 0, last = data.hist[data.hist.length - 1];
+    for (var i = data.hist.length - 1; i >= 0; i--) {
+      if (data.hist[i] === last) n++; else break;
+    }
+    return n;
+  }
+
+  function render() {
+    var t = data.heads + data.tails;
+    $('stTotal').textContent = t;
+    $('stHeads').textContent = data.heads;
+    $('stTails').textContent = data.tails;
+    $('stHeadsP').textContent = Math.round(data.heads / (t || 1) * 100) + '%';
+    $('stTailsP').textContent = Math.round(data.tails / (t || 1) * 100) + '%';
+    var hist = $('history');
+    hist.textContent = '';
+    data.hist.slice().reverse().forEach(function (h) {
+      var c = document.createElement('span');
+      c.className = 'chip ' + (h ? 'h' : 't');
+      c.textContent = h ? '正' : '反';
+      hist.appendChild(c);
+    });
+  }
+
+  function flip() {
+    if (busy) return;
+    busy = true;
+    flipBtn.classList.add('busy');
+    var heads = randBit() === 0;
+    var current = angle % 360;
+    var target = heads ? 0 : 180;
+    var delta = (target - current + 360) % 360;
+    var turns = 6 + Math.floor(Math.random() * 4);      // 再转 6–9 整圈
+    angle += turns * 360 + delta;
+    var wobble = Math.round(Math.random() * 14 - 7);    // 轻微倾斜，更自然
+    result.querySelector('.big').textContent = '…';
+    result.classList.remove('pop');
+    toss.classList.remove('tossing');
+    shadow.classList.remove('tossing');
+    void toss.offsetWidth;                               // 重启动画
+    toss.classList.add('tossing');
+    shadow.classList.add('tossing');
+    coin.style.transform = 'rotateX(' + angle + 'deg) rotateZ(' + wobble + 'deg)';
+    sfxFlick();
+    setTimeout(function () { land(heads); }, 1560);
+  }
+
+  function land(heads) {
+    var big = result.querySelector('.big');
+    big.textContent = heads ? '正' : '反';
+    big.className = 'big ' + (heads ? 'heads-c' : 'tails-c');
+    result.classList.add('pop');
+    data[heads ? 'heads' : 'tails']++;
+    data.hist.push(heads);
+    if (data.hist.length > 14) data.hist.shift();
+    persist(); render();
+    var s = streak();
+    result.querySelector('.streak').textContent = s >= 2 ? '连续 ' + s + ' 次' + (heads ? '正面' : '反面') + '！' : '';
+    sfxDing(heads);
+    sparkle();
+    if (navigator.vibrate) { try { navigator.vibrate(30); } catch (e) {} }
+    busy = false;
+    flipBtn.classList.remove('busy');
+  }
+
+  $('reset').onclick = function () {
+    data = { heads: 0, tails: 0, hist: [] };
+    persist(); render();
+    var big = result.querySelector('.big');
+    big.textContent = '正';
+    big.className = 'big heads-c';
+    result.querySelector('.streak').textContent = '记录已清空';
+  };
+  flipBtn.addEventListener('click', flip);
+  stage.addEventListener('click', flip);
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); flip(); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
